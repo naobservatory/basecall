@@ -4,6 +4,11 @@ import sys
 import shutil
 import subprocess
 
+# Prereq: mount-s3 nao-restricted ~/s3-mnt/nao-restricted/
+# Usage: /basecall.py "dna_r10.4.1_e8.2_400bps_hac@v4.1.0" SQK-NBD114-24 \
+#   ~/s3-mnt/nao-restricted/NAO-ONT-20240519-practice/fast5/ \
+#   NAO-ONT-20240519-practice
+
 model, kit, s3_in_dir, out_prefix = sys.argv[1:]
 
 BATCH_SIZE=1024**3  # 1GiB
