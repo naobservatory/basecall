@@ -4,12 +4,15 @@ import sys
 import shutil
 import subprocess
 
-# Usage: ./basecall.py "dna_r10.4.1_e8.2_400bps_hac@v4.1.0" SQK-NBD114-24 \
+# Usage: ./basecall.py ~/dna_r10.4.1_e8.2_400bps_hac@v4.1.0 SQK-NBD114-24 \
 #   NAO-ONT-20240519-practice
 
 BATCH_SIZE=1024**3  # 1GiB
 
-model, kit, bioproject = sys.argv[1:]
+model_path, kit, bioproject = sys.argv[1:]
+
+if not os.path.exists(model_path):
+    raise Exception("Model not present: %r" % model_path)
 
 WORK_DIR=os.path.join(os.path.expanduser("~/basecall-work"), bioproject)
 os.makedirs(WORK_DIR, exist_ok=True)
@@ -56,19 +59,20 @@ for i, batch in enumerate(batch_input_files()):
         print("Skipping basecalling because already complete.")
     else:
         print("Basecalling...")
-        batch_dir = os.path,join(WORK_DIR, "batch-fast5-%i" % i)
+        batch_dir = os.path.join(WORK_DIR, "batch-fast5-%i" % i)
 
         if not os.path.exists(batch_dir):
             os.mkdir(batch_dir)
+            print("Copying down files to basecall...")
             for fname in batch:
                 shutil.copy(fname, batch_dir)
 
         subprocess.check_call([
-            "./basecall.sh", kit, model, batch_dir, bam_fname])
+            "./basecall.sh", kit, model_path, batch_dir, bam_fname])
 
         shutil.rmtree(batch_dir)
 
-    demux_dir = os.path,join(WORK_DIR, "demux-%i" % i)
+    demux_dir = os.path.join(WORK_DIR, "demux-%i" % i)
     if os.path.exists(demux_dir):
         print("Skipping demultiplexing because already exists.")
     else:
@@ -82,24 +86,20 @@ for i, batch in enumerate(batch_input_files()):
 
     for demux_bam_leaf in os.listdir(demux_dir):
         assert demux_bam_leaf.endswith(".bam")
-        barcode_number = int(demux_bam_leaf.replace(
-            "%s_barcode/" % kit, "").replace(".bam", ""))
+        barcode = demux_bam_leaf.replace(
+            "%s_barcode" % kit, "").replace(".bam", "")
         demux_bam_fname = os.path.join(demux_dir, demux_bam_leaf)
         fastq_gz_div_fname = os.path.join(
             WORK_DIR,
-            "%s-%02d-div%04d" % (bioproject, barcode_number, i))
+            "%s-%s-div%04d.fastq.gz" % (bioproject, barcode, i))
         subprocess.check_call([
             "./bam_to_fastq_gz.sh", demux_bam_fname, fastq_gz_div_fname])
 
-        if False:
-            subprocess.check_call([
-                "aws", "s3", "cp", fastq_gz_div_fname,
-                "s3://nao-restricted/%s/raw/" % bioproject])
+        subprocess.check_call([
+            "aws", "s3", "cp", fastq_gz_div_fname,
+            "s3://nao-restricted/%s/raw/" % bioproject])
 
-            # TODO: remove fastq_gz_div_fname
-        else:
-            print("skipping copying %s to s3" % (
-                fastq_gz_div_fname))
+        os.remove(fastq_gz_div_fname)
 
     shutil.rmtree(demux_dir)
     
