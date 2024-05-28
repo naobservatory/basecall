@@ -4,14 +4,26 @@ import sys
 import shutil
 import subprocess
 
-# Prereq: mount-s3 nao-restricted ~/s3-mnt/nao-restricted/
-# Usage: /basecall.py "dna_r10.4.1_e8.2_400bps_hac@v4.1.0" SQK-NBD114-24 \
-#   ~/s3-mnt/nao-restricted/NAO-ONT-20240519-practice/fast5/ \
+# Usage: ./basecall.py "dna_r10.4.1_e8.2_400bps_hac@v4.1.0" SQK-NBD114-24 \
 #   NAO-ONT-20240519-practice
 
-model, kit, s3_in_dir, out_prefix = sys.argv[1:]
-
 BATCH_SIZE=1024**3  # 1GiB
+
+model, kit, bioproject = sys.argv[1:]
+
+WORK_DIR=os.path.join(os.path.expanduser("~/basecall-work"), bioproject)
+os.makedirs(WORK_DIR, exist_ok=True)
+
+S3_DIR=os.path.expanduser("~/s3-mnt/nao-restricted/")
+def s3_mounted():
+    return os.path.exists(os.path.join(S3_DIR, "nao-restricted-exists"))
+
+if not s3_mounted():
+    subprocess.check_call(["mount-s3", "nao-restricted", S3_DIR])
+assert s3_mounted()
+
+s3_in_dir = os.path.join(S3_DIR, bioproject, "fast5")
+s3_out_dir = os.path.join(S3_DIR, bioproject, "raw")
 
 def batch_input_files():
     batches = []
@@ -33,21 +45,61 @@ def batch_input_files():
     if current_batch:
         yield current_batch
 
+# TODO: this could be made faster by parallelizing: we could be simultaneously
+# copying down files for batch 3, basecalling batch 2, and demultiplexing batch
+# 1.
 for i, batch in enumerate(batch_input_files()):
-    print("Processing batch %s" % i)
-    batch_dir = "batch-fast5-%i" % i
-    out_fname = "%s-%s.bam" % (out_prefix, i)
+    print("Processing batch %s..." % i)
 
-    if not os.path.exists(batch_dir):
-        os.mkdir(batch_dir)
-        for fname in batch:
-            shutil.copy(fname, batch_dir)
+    bam_fname = os.path.join(WORK_DIR, "%s.bam" % i)
+    if os.path.exists(bam_fname):
+        print("Skipping basecalling because already complete.")
+    else:
+        print("Basecalling...")
+        batch_dir = os.path,join(WORK_DIR, "batch-fast5-%i" % i)
 
-    subprocess.check_call([
-        "./basecall.sh", kit, model, batch_dir, out_fname])
-        
-    shutil.rmtree(batch_dir)
+        if not os.path.exists(batch_dir):
+            os.mkdir(batch_dir)
+            for fname in batch:
+                shutil.copy(fname, batch_dir)
 
+        subprocess.check_call([
+            "./basecall.sh", kit, model, batch_dir, bam_fname])
 
+        shutil.rmtree(batch_dir)
 
+    demux_dir = os.path,join(WORK_DIR, "demux-%i" % i)
+    if os.path.exists(demux_dir):
+        print("Skipping demultiplexing because already exists.")
+    else:
+        print("Demultiplexing...")
+        subprocess.check_call([
+            os.path.expanduser("~/dorado-0.6.1-linux-x64/bin/dorado"),
+            "demux",
+            "--output-dir", demux_dir,
+            "--kit-name", kit,
+            bam_fname])
+
+    for demux_bam_leaf in os.listdir(demux_dir):
+        assert demux_bam_leaf.endswith(".bam")
+        barcode_number = int(demux_bam_leaf.replace(
+            "%s_barcode/" % kit, "").replace(".bam", ""))
+        demux_bam_fname = os.path.join(demux_dir, demux_bam_leaf)
+        fastq_gz_div_fname = os.path.join(
+            WORK_DIR,
+            "%s-%02d-div%04d" % (bioproject, barcode_number, i))
+        subprocess.check_call([
+            "./bam_to_fastq_gz.sh", demux_bam_fname, fastq_gz_div_fname])
+
+        if False:
+            subprocess.check_call([
+                "aws", "s3", "cp", fastq_gz_div_fname,
+                "s3://nao-restricted/%s/raw/" % bioproject])
+
+            # TODO: remove fastq_gz_div_fname
+        else:
+            print("skipping copying %s to s3" % (
+                fastq_gz_div_fname))
+
+    shutil.rmtree(demux_dir)
     
