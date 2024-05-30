@@ -22,7 +22,7 @@ def s3_mounted():
     return os.path.exists(os.path.join(S3_DIR, "nao-restricted-exists"))
 
 if not s3_mounted():
-    subprocess.check_call(["mount-s3", "nao-restricted", S3_DIR])
+    subprocess.check_call(["mount-s3", "--read-only", "nao-restricted", S3_DIR])
 assert s3_mounted()
 
 s3_in_dir = os.path.join(S3_DIR, bioproject, "fast5")
