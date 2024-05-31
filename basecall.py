@@ -4,15 +4,11 @@ import sys
 import shutil
 import subprocess
 
-# Usage: ./basecall.py ~/dna_r10.4.1_e8.2_400bps_hac@v4.1.0 SQK-NBD114-24 \
-#   NAO-ONT-20240519-practice
+# Usage: ./basecall.py SQK-NBD114-24 NAO-ONT-20240519-practice
 
 BATCH_SIZE=1024**3  # 1GiB
 
-model_path, kit, bioproject = sys.argv[1:]
-
-if not os.path.exists(model_path):
-    raise Exception("Model not present: %r" % model_path)
+kit, bioproject = sys.argv[1:]
 
 WORK_DIR=os.path.join(os.path.expanduser("~/basecall-work"), bioproject)
 os.makedirs(WORK_DIR, exist_ok=True)
@@ -25,7 +21,7 @@ if not s3_mounted():
     subprocess.check_call(["mount-s3", "--read-only", "nao-restricted", S3_DIR])
 assert s3_mounted()
 
-s3_in_dir = os.path.join(S3_DIR, bioproject, "fast5")
+s3_in_dir = os.path.join(S3_DIR, bioproject, "pod5")
 s3_out_dir = os.path.join(S3_DIR, bioproject, "raw")
 
 def batch_input_files():
@@ -68,7 +64,7 @@ for i, batch in enumerate(batch_input_files()):
                 shutil.copy(fname, batch_dir)
 
         subprocess.check_call([
-            "./basecall.sh", kit, model_path, batch_dir, bam_fname])
+            "./basecall.sh", kit, "sup", batch_dir, bam_fname])
 
         shutil.rmtree(batch_dir)
 
