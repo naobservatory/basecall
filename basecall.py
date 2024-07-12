@@ -3,14 +3,18 @@ import os
 import sys
 import shutil
 import subprocess
+import argparse
 
-# Usage: ./basecall.py SQK-NBD114-24 NAO-ONT-20240519-practice
+# Usage: ./basecall.py --kit SQK-NBD114-24 NAO-ONT-20240519-practice
 
 BATCH_SIZE=1024**3  # 1GiB
 
-kit, bioproject = sys.argv[1:]
+parser = argparse.ArgumentParser()
+parser.add_argument("--kit")
+parser.add_argument("bioproject")
+args = parser.parse_args()
 
-WORK_DIR=os.path.join(os.path.expanduser("~/basecall-work"), bioproject)
+WORK_DIR=os.path.join(os.path.expanduser("~/basecall-work"), args.bioproject)
 os.makedirs(WORK_DIR, exist_ok=True)
 
 S3_DIR=os.path.expanduser("~/s3-mnt/nao-restricted/")
@@ -21,8 +25,8 @@ if not s3_mounted():
     subprocess.check_call(["mount-s3", "--read-only", "nao-restricted", S3_DIR])
 assert s3_mounted()
 
-s3_in_dir = os.path.join(S3_DIR, bioproject, "pod5")
-s3_out_dir = os.path.join(S3_DIR, bioproject, "raw")
+s3_in_dir = os.path.join(S3_DIR, args.bioproject, "pod5")
+s3_out_dir = os.path.join(S3_DIR, args.bioproject, "raw")
 
 def batch_input_files():
     batches = []
@@ -63,12 +67,12 @@ for i, batch in enumerate(batch_input_files()):
             for fname in batch:
                 shutil.copy(fname, batch_dir)
 
-        cmd = ["/home/ubuntu/dorado-0.6.1-linux-x64/bin/dorado",
-               "basecall",
-               "--kit-name",
-               kit,
-               "sup",
-               batch_dir]
+        cmd = [os.path.expanduser("~/dorado-0.6.1-linux-x64/bin/dorado"),
+               "basecaller"]
+        if args.kit:
+            cmd.extend(["--kit", args.kit])
+        cmd.extend(["sup", batch_dir])
+        
         with open(bam_fname, "w") as outf:
             subprocess.check_call(cmd, stdout=outf)
 
@@ -77,31 +81,45 @@ for i, batch in enumerate(batch_input_files()):
     demux_dir = os.path.join(WORK_DIR, "demux-%i" % i)
     if os.path.exists(demux_dir):
         print("Skipping demultiplexing because already exists.")
+    elif not args.kit:
+        print("Skipping demultiplexing because no kit was provided.")
     else:
         print("Demultiplexing...")
         subprocess.check_call([
             os.path.expanduser("~/dorado-0.6.1-linux-x64/bin/dorado"),
             "demux",
             "--output-dir", demux_dir,
-            "--kit-name", kit,
+            "--kit-name", args.kit,
             bam_fname])
 
-    for demux_bam_leaf in os.listdir(demux_dir):
-        assert demux_bam_leaf.endswith(".bam")
-        barcode = demux_bam_leaf.replace(
-            "%s_barcode" % kit, "").replace(".bam", "")
-        demux_bam_fname = os.path.join(demux_dir, demux_bam_leaf)
+    bam_and_fastqs = []
+    if args.kit:
+        for demux_bam_leaf in os.listdir(demux_dir):
+            assert demux_bam_leaf.endswith(".bam")
+            barcode = demux_bam_leaf.replace(
+                "%s_barcode" % kit, "").replace(".bam", "")
+            demux_bam_fname = os.path.join(demux_dir, demux_bam_leaf)
+            fastq_gz_div_fname = os.path.join(
+                WORK_DIR,
+                "%s-%s-div%04d.fastq.gz" % (args.bioproject, barcode, i))
+            bam_and_fastqs.append((demux_bam_fname, fastq_gz_div_fname))
+    else:
         fastq_gz_div_fname = os.path.join(
             WORK_DIR,
-            "%s-%s-div%04d.fastq.gz" % (bioproject, barcode, i))
+            "%s-div%04d.fastq.gz" % (args.bioproject, i))
+        bam_and_fastqs.append((bam_fname, fastq_gz_div_fname))
+
+    for bam_fname, fastq_gz_div_fname in bam_and_fastqs:
         subprocess.check_call([
-            "./bam_to_fastq_gz.sh", demux_bam_fname, fastq_gz_div_fname])
+            "./bam_to_fastq_gz.sh", bam_fname, fastq_gz_div_fname])
 
         subprocess.check_call([
             "aws", "s3", "cp", fastq_gz_div_fname,
-            "s3://nao-restricted/%s/raw/" % bioproject])
+            "s3://nao-restricted/%s/raw/" % args.bioproject])
 
         os.remove(fastq_gz_div_fname)
+        os.remove(bam_fname)
 
-    shutil.rmtree(demux_dir)
+    if args.kit:
+        shutil.rmtree(demux_dir)
     
