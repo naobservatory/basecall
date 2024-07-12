@@ -63,8 +63,14 @@ for i, batch in enumerate(batch_input_files()):
             for fname in batch:
                 shutil.copy(fname, batch_dir)
 
-        subprocess.check_call([
-            "./basecall.sh", kit, "sup", batch_dir, bam_fname])
+        cmd = ["/home/ubuntu/dorado-0.6.1-linux-x64/bin/dorado",
+               "basecall",
+               "--kit-name",
+               kit,
+               "sup",
+               batch_dir]
+        with open(bam_fname, "w") as outf:
+            subprocess.check_call(cmd, stdout=outf)
 
         shutil.rmtree(batch_dir)
 
