@@ -70,7 +70,7 @@ for i, batch in enumerate(batch_input_files()):
         cmd = [os.path.expanduser("~/dorado-0.6.1-linux-x64/bin/dorado"),
                "basecaller"]
         if args.kit:
-            cmd.extend(["--kit", args.kit])
+            cmd.extend(["--kit-name", args.kit])
         cmd.extend(["sup", batch_dir])
         
         with open(bam_fname, "w") as outf:
