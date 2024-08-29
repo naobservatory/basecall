@@ -97,7 +97,7 @@ for i, batch in enumerate(batch_input_files()):
         for demux_bam_leaf in os.listdir(demux_dir):
             assert demux_bam_leaf.endswith(".bam")
             barcode = demux_bam_leaf.replace(
-                "%s_barcode" % kit, "").replace(".bam", "")
+                "%s_barcode" % args.kit, "").replace(".bam", "")
             demux_bam_fname = os.path.join(demux_dir, demux_bam_leaf)
             fastq_gz_div_fname = os.path.join(
                 WORK_DIR,
