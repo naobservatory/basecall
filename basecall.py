@@ -14,6 +14,9 @@ parser.add_argument("--kit")
 parser.add_argument("bioproject")
 args = parser.parse_args()
 
+# Remove trailing slash from bioproject if present
+args.bioproject = args.bioproject.rstrip('/')
+
 WORK_DIR=os.path.join(os.path.expanduser("~/basecall-work"), args.bioproject)
 os.makedirs(WORK_DIR, exist_ok=True)
 
@@ -22,6 +25,7 @@ def s3_mounted():
     return os.path.exists(os.path.join(S3_DIR, "nao-restricted-exists"))
 
 if not s3_mounted():
+    os.makedirs(S3_DIR, exist_ok=True)
     subprocess.check_call(["mount-s3", "--read-only", "nao-restricted", S3_DIR])
 assert s3_mounted()
 
@@ -67,12 +71,12 @@ for i, batch in enumerate(batch_input_files()):
             for fname in batch:
                 shutil.copy(fname, batch_dir)
 
-        cmd = [os.path.expanduser("~/dorado-0.6.1-linux-x64/bin/dorado"),
+        cmd = [os.path.expanduser("~/dorado-0.7.3-linux-x64/bin/dorado"),
                "basecaller"]
         if args.kit:
             cmd.extend(["--kit-name", args.kit])
         cmd.extend(["sup", batch_dir])
-        
+
         with open(bam_fname, "w") as outf:
             subprocess.check_call(cmd, stdout=outf)
 
@@ -86,7 +90,7 @@ for i, batch in enumerate(batch_input_files()):
     else:
         print("Demultiplexing...")
         subprocess.check_call([
-            os.path.expanduser("~/dorado-0.6.1-linux-x64/bin/dorado"),
+            os.path.expanduser("~/dorado-0.7.3-linux-x64/bin/dorado"),
             "demux",
             "--output-dir", demux_dir,
             "--kit-name", args.kit,
@@ -122,4 +126,4 @@ for i, batch in enumerate(batch_input_files()):
 
     if args.kit:
         shutil.rmtree(demux_dir)
-    
+
