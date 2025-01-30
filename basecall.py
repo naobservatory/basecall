@@ -41,7 +41,7 @@ def batch_input_files():
         path = os.path.join(s3_in_dir, fname)
         size = os.path.getsize(path)
 
-        if current_batch_size + size > BATCH_SIZE:
+        if current_batch_size + size > BATCH_SIZE and current_batch:
             yield current_batch
             current_batch = []
             current_batch_size = 0
@@ -56,7 +56,8 @@ def batch_input_files():
 # copying down files for batch 3, basecalling batch 2, and demultiplexing batch
 # 1.
 for i, batch in enumerate(batch_input_files()):
-    print("Processing batch %s..." % i)
+    print("Processing batch %s of %s files..." % (i, len(batch)))
+    assert batch
 
     bam_fname = os.path.join(WORK_DIR, "%s.bam" % i)
     if os.path.exists(bam_fname):
