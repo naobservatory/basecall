@@ -71,11 +71,11 @@ for i, batch in enumerate(batch_input_files()):
             for fname in batch:
                 shutil.copy(fname, batch_dir)
 
-        cmd = [os.path.expanduser("~/dorado-0.7.3-linux-x64/bin/dorado"),
+        cmd = [os.path.expanduser("~/dorado-0.8.3-linux-x64/bin/dorado"),
                "basecaller"]
+        cmd.extend(["sup", batch_dir])
         if args.kit:
             cmd.extend(["--kit-name", args.kit])
-        cmd.extend(["sup", batch_dir])
 
         with open(bam_fname, "w") as outf:
             subprocess.check_call(cmd, stdout=outf)
@@ -90,10 +90,10 @@ for i, batch in enumerate(batch_input_files()):
     else:
         print("Demultiplexing...")
         subprocess.check_call([
-            os.path.expanduser("~/dorado-0.7.3-linux-x64/bin/dorado"),
+            os.path.expanduser("~/dorado-0.8.3-linux-x64/bin/dorado"),
             "demux",
+            "--no-classify",
             "--output-dir", demux_dir,
-            "--kit-name", args.kit,
             bam_fname])
 
     bam_and_fastqs = []
