@@ -55,8 +55,10 @@ def batch_input_files():
 # TODO: this could be made faster by parallelizing: we could be simultaneously
 # copying down files for batch 3, basecalling batch 2, and demultiplexing batch
 # 1.
-for i, batch in enumerate(batch_input_files()):
-    print("Processing batch %s of %s files..." % (i, len(batch)))
+batches = batch_input_files()
+for i, batch in enumerate(batches):
+    print("Processing batch %s of %s, containing %s files..." % (
+        i, len(batches), len(batch)))
     assert batch
 
     bam_fname = os.path.join(WORK_DIR, "%s.bam" % i)
