@@ -55,7 +55,7 @@ def batch_input_files():
 # TODO: this could be made faster by parallelizing: we could be simultaneously
 # copying down files for batch 3, basecalling batch 2, and demultiplexing batch
 # 1.
-batches = batch_input_files()
+batches = list(batch_input_files())
 for i, batch in enumerate(batches):
     print("Processing batch %s of %s, containing %s files..." % (
         i, len(batches), len(batch)))
