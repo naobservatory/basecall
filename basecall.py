@@ -32,7 +32,7 @@ assert s3_mounted()
 s3_in_dir = os.path.join(S3_DIR, args.bioproject, "pod5")
 s3_out_dir = os.path.join(S3_DIR, args.bioproject, "raw")
 
-def batch_input_files():
+def batch_input_files(max_files_per_batch=None):
     batches = []
     current_batch = []
     current_batch_size = 0
@@ -41,7 +41,9 @@ def batch_input_files():
         path = os.path.join(s3_in_dir, fname)
         size = os.path.getsize(path)
 
-        if current_batch_size + size > BATCH_SIZE and current_batch:
+        if (current_batch_size + size > BATCH_SIZE or
+            len(current_batch) >= max_files_per_batch) and current_batch:
+
             yield current_batch
             current_batch = []
             current_batch_size = 0
@@ -55,11 +57,22 @@ def batch_input_files():
 # TODO: this could be made faster by parallelizing: we could be simultaneously
 # copying down files for batch 3, basecalling batch 2, and demultiplexing batch
 # 1.
-batches = list(batch_input_files())
+batches = list(batch_input_files(max_files_per_batch=1))
+
+existing_output = subprocess.check_output([
+    "aws", "s3", "ls",
+    "s3://nao-restricted/%s/raw/" % args.bioproject])
+
 for i, batch in enumerate(batches):
     print("Processing batch %s of %s, containing %s files..." % (
-        i, len(batches), len(batch)))
+        i+1, len(batches), len(batch)))
+    for fname in batch:
+        print(" ", fname)
     assert batch
+
+    if b"-div%04d.fastq.gz" % i in existing_output:
+        print("Already processed div%04d; skipping." % i)
+        continue
 
     bam_fname = os.path.join(WORK_DIR, "%s.bam" % i)
     if os.path.exists(bam_fname):
@@ -129,4 +142,3 @@ for i, batch in enumerate(batches):
 
     if args.kit:
         shutil.rmtree(demux_dir)
-
